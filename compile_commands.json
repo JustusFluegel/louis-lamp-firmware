@@ -1,0 +1,83 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/riscv64-elf-gcc",
+      "-c",
+      "-g",
+      "-Os",
+      "-flto",
+      "-ffunction-sections",
+      "-fdata-sections",
+      "-fmessage-length=0",
+      "-msmall-data-limit=8",
+      "-march=rv32ec",
+      "-mabi=ilp32e",
+      "-DCH32V003",
+      "-I/usr/include/newlib",
+      "-I../ch32fun/ch32fun//../extralibs",
+      "-I../ch32fun/ch32fun/",
+      "-I.",
+      "-Wall",
+      "-o",
+      "test-firmware.elf",
+      "../ch32fun/ch32fun//ch32fun.c"
+    ],
+    "directory": "/Projects/106-platformio/louis-lamp/ch32v003-software/test-firmware",
+    "file": "/Projects/106-platformio/louis-lamp/ch32v003-software/ch32fun/ch32fun/ch32fun.c",
+    "output": "/Projects/106-platformio/louis-lamp/ch32v003-software/test-firmware/test-firmware.elf"
+  },
+  {
+    "arguments": [
+      "/usr/bin/riscv64-elf-gcc",
+      "-c",
+      "-g",
+      "-Os",
+      "-flto",
+      "-ffunction-sections",
+      "-fdata-sections",
+      "-fmessage-length=0",
+      "-msmall-data-limit=8",
+      "-march=rv32ec",
+      "-mabi=ilp32e",
+      "-DCH32V003",
+      "-I/usr/include/newlib",
+      "-I../ch32fun/ch32fun//../extralibs",
+      "-I../ch32fun/ch32fun/",
+      "-I.",
+      "-Wall",
+      "-o",
+      "test-firmware.elf",
+      "test-firmware.c"
+    ],
+    "directory": "/Projects/106-platformio/louis-lamp/ch32v003-software/test-firmware",
+    "file": "/Projects/106-platformio/louis-lamp/ch32v003-software/test-firmware/test-firmware.c",
+    "output": "/Projects/106-platformio/louis-lamp/ch32v003-software/test-firmware/test-firmware.elf"
+  },
+  {
+    "arguments": [
+      "/usr/bin/riscv64-elf-gcc",
+      "-c",
+      "-g",
+      "-Os",
+      "-flto",
+      "-ffunction-sections",
+      "-fdata-sections",
+      "-fmessage-length=0",
+      "-msmall-data-limit=8",
+      "-march=rv32ec",
+      "-mabi=ilp32e",
+      "-DCH32V003",
+      "-I/usr/include/newlib",
+      "-I../ch32fun/ch32fun//../extralibs",
+      "-I../ch32fun/ch32fun/",
+      "-I.",
+      "-Wall",
+      "-o",
+      "test-firmware.elf",
+      "touch_sense.c"
+    ],
+    "directory": "/Projects/106-platformio/louis-lamp/ch32v003-software/test-firmware",
+    "file": "/Projects/106-platformio/louis-lamp/ch32v003-software/test-firmware/touch_sense.c",
+    "output": "/Projects/106-platformio/louis-lamp/ch32v003-software/test-firmware/test-firmware.elf"
+  }
+]

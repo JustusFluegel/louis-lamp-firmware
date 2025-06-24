@@ -1,0 +1,6 @@
+.cache/
+*.bin
+*.hex
+*.elf
+*.map
+*.lst
