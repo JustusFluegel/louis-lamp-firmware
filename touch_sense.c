@@ -1,5 +1,6 @@
 #include "touch_sense.h"
 
+#include "ch32fun.h"
 #include "ch32v003_touch.h"
 
 bool touchSensorInitialized = false;
@@ -58,7 +59,16 @@ TouchSensorReadResult readTouchSensor(TouchSensor *sensor) {
                       ? 0xFFFFFFFF
                       : ((1U << sensor->window_size) - 1);
 
+  uint32_t last_state_duration = SysTick->CNT - current_state_systick;
+
+  bool timeout_triggered = false;
   if (current_state) {
+    bool timeouted = (last_state_duration / DELAY_MS_TIME) >= 1000 * 30;
+    if (timeouted) {
+      timeout_triggered = true;
+      sensor->last_triggered_states = 0;
+      sensor->time_since_trigger = sensor->settle_iterations;
+    }
     if ((sensor->last_triggered_states & mask) == 0x00) {
       current_state = false;
       current_state_systick = SysTick->CNT;
@@ -80,9 +90,19 @@ TouchSensorReadResult readTouchSensor(TouchSensor *sensor) {
     }
 
     if (sensor->time_since_trigger >= sensor->settle_iterations) {
-      sensor->idle_val = (sensor->idle_val * (sensor->idle_val_init_count - 1) +
-                          oversampled_val) /
-                         sensor->idle_val_init_count;
+      if (timeout_triggered) {
+        sensor->idle_val = 0;
+        for (int i = 0; i < sensor->idle_val_init_count; i++) {
+          sensor->idle_val += ReadTouchPin(sensor->io, sensor->portpin,
+                                           sensor->adcno, sensor->iterations);
+        }
+        sensor->idle_val /= sensor->idle_val_init_count;
+      } else {
+        sensor->idle_val =
+            (sensor->idle_val * (sensor->idle_val_init_count - 1) +
+             oversampled_val) /
+            sensor->idle_val_init_count;
+      }
     }
   }
 
@@ -93,8 +113,6 @@ TouchSensorReadResult readTouchSensor(TouchSensor *sensor) {
   } else if (!current_state && sensor->current_state) {
     state = TouchSensorReadStateFallingEdge;
   }
-
-  uint32_t last_state_duration = SysTick->CNT - current_state_systick;
 
   sensor->current_state = current_state;
   sensor->current_state_change_systick = current_state_systick;
