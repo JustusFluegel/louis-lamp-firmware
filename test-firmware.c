@@ -4,8 +4,9 @@
 #include "config.h"
 #include "touch_sense.h"
 
-#include <inttypes.h>
+// #include <inttypes.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 void write_led(bool on) {
   if (on && debug_led_enabled) {
@@ -116,7 +117,7 @@ void turn_on(BrightnessController *controller) {
 }
 
 void turn_off(BrightnessController *controller) {
-  ramp_up_down_brightness(controller, controller->last_brightness, 0, 0);
+  ramp_up_down_brightness(controller, controller->last_brightness, 0, turn_off_brightness_rampdown_delay_ms);
   for (int i = 0; i < controller->count; i++) {
     *controller->control_field[i] = led_off_value;
   }
@@ -207,6 +208,7 @@ int main() {
   bool brightness_ramp_direction = brightness != 255;
   for (;;) {
     TouchSensorReadResult result = readTouchSensor(&sensor);
+    printf("time_ms: %d state: %d pressed: %d\n", result.last_state_duration / DELAY_MS_TIME, result.state, result.pressed);
 
     if (result.state == TouchSensorReadStateFallingEdge) {
       if (!brightness_ramp_started) {
@@ -214,7 +216,6 @@ int main() {
       }
       brightness_ramp_started = false;
     }
-    // printf("%d \n", result.last_state_duration / DELAY_MS_TIME);
 
     uint32_t systick = SysTick->CNT;
     if (((controller.is_on &&

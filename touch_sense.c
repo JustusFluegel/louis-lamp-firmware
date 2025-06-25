@@ -59,7 +59,9 @@ TouchSensorReadResult readTouchSensor(TouchSensor *sensor) {
                       ? 0xFFFFFFFF
                       : ((1U << sensor->window_size) - 1);
 
-  uint32_t last_state_duration = SysTick->CNT - current_state_systick;
+  uint32_t current_systick = SysTick->CNT;
+
+  uint32_t last_state_duration = current_systick - current_state_systick;
 
   bool timeout_triggered = false;
   if (current_state) {
@@ -71,12 +73,12 @@ TouchSensorReadResult readTouchSensor(TouchSensor *sensor) {
     }
     if ((sensor->last_triggered_states & mask) == 0x00) {
       current_state = false;
-      current_state_systick = SysTick->CNT;
+      current_state_systick = current_systick;
     }
   } else {
     if ((sensor->last_triggered_states & mask) == mask) {
       current_state = true;
-      current_state_systick = SysTick->CNT;
+      current_state_systick = current_systick;
     }
   }
 
@@ -118,7 +120,7 @@ TouchSensorReadResult readTouchSensor(TouchSensor *sensor) {
   sensor->current_state_change_systick = current_state_systick;
 
   TouchSensorReadResult result = {.state = state,
-                                  .last_state_duration = last_state_duration,
+                                  .last_state_duration = current_systick - current_state_systick,
                                   .pressed = current_state
 
   };
