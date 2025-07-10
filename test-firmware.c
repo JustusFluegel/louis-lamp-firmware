@@ -1,4 +1,5 @@
 
+#include "brightness_controller.h"
 #include "ch32fun.h"
 #include "ch32v003hw.h"
 #include "config.h"
@@ -6,201 +7,102 @@
 
 // #include <inttypes.h>
 #include <stdbool.h>
-#include <stdio.h>
 
 void write_led(bool on) {
   if (on && debug_led_enabled) {
     GPIOC->BSHR = (1 << 3);
-    // GPIOD->BSHR = (1 << 2);
-    // GPIOD->BSHR = (1 << 3);
   } else {
     GPIOC->BSHR = (1 << (16 + 3));
-    // GPIOD->BSHR = (1 << (16 + 2));
-    // GPIOD->BSHR = (1 << (16 + 3));
   }
 }
 
-typedef struct BrightnessController {
-  uint32_t last_on_time;
-  uint32_t last_brightness;
-  bool is_on;
-  volatile uint32_t **control_field;
-  int count;
-} BrightnessController;
-
-BrightnessController brightnessController(volatile uint32_t **control_field,
-                                          int count) {
-  BrightnessController controller = {.control_field = control_field,
-                                     .last_on_time = 0,
-                                     .last_brightness = 255,
-                                     .is_on = false,
-                                     .count = count};
-
-  return controller;
-}
-
-void ramp_up_down_brightness(BrightnessController *controller,
-                             uint8_t start_brightness, uint8_t end_brightness,
-                             uint32_t speed) {
-  if (start_brightness == end_brightness) {
-    TIM1->CH1CVR = brightness_steps[start_brightness];
-
-  } else if (start_brightness < end_brightness) {
-    uint32_t brightness = start_brightness;
-    uint32_t last_duration = SysTick->CNT;
-    for (int i = 0; i < controller->count; i++) {
-      *controller->control_field[i] = brightness_steps[brightness];
-    }
-    while (brightness < end_brightness) {
-      uint32_t systick = SysTick->CNT;
-      if (((systick - last_duration) / DELAY_MS_TIME) >=
-          (speed == 0 ? brightness_rampup_delay_ms : speed)) {
-        last_duration = systick;
-        brightness++;
-        brightness &= 255;
-        for (int i = 0; i < controller->count; i++) {
-          *controller->control_field[i] = brightness_steps[brightness];
-        }
-      }
-      Delay_Ms(1);
-    }
-
-  } else {
-    uint32_t brightness = start_brightness;
-    uint32_t last_duration = SysTick->CNT;
-    for (int i = 0; i < controller->count; i++) {
-      *controller->control_field[i] = brightness_steps[brightness];
-    }
-    while (brightness > end_brightness) {
-      uint32_t systick = SysTick->CNT;
-      if (((systick - last_duration) / DELAY_MS_TIME) >=
-          (speed == 0 ? brightness_rampdown_delay_ms : speed)) {
-        last_duration = systick;
-        brightness--;
-        brightness &= 255;
-        for (int i = 0; i < controller->count; i++) {
-          *controller->control_field[i] = brightness_steps[brightness];
-        }
-      }
-      Delay_Ms(1);
-    }
-  }
-}
-
-void set_brightness(BrightnessController *controller,
-                    uint8_t target_brightness) {
-  if (target_brightness < min_brightness_dim_on &&
-      (SysTick->CNT - controller->last_on_time) / DELAY_MS_TIME >
-          min_brightness_min_period_ms &&
-      !controller->is_on) {
-    uint32_t brightness = min_brightness_dim_on;
-    for (int i = 0; i < controller->count; i++) {
-      *controller->control_field[i] = brightness_steps[brightness];
-    }
-    Delay_Ms(50);
-    ramp_up_down_brightness(controller, brightness, target_brightness, 0);
-  } else {
-    for (int i = 0; i < controller->count; i++) {
-      *controller->control_field[i] = brightness_steps[target_brightness];
-    }
-  }
-  controller->last_brightness = target_brightness;
-  controller->is_on = true;
-  controller->last_on_time = SysTick->CNT;
-}
-
-void turn_on(BrightnessController *controller) {
-  ramp_up_down_brightness(controller, min_brightness_dim_on,
-                          controller->last_brightness, 0);
-  controller->is_on = true;
-  controller->last_on_time = SysTick->CNT;
-}
-
-void turn_off(BrightnessController *controller) {
-  ramp_up_down_brightness(controller, controller->last_brightness, 0, turn_off_brightness_rampdown_delay_ms);
-  for (int i = 0; i < controller->count; i++) {
-    *controller->control_field[i] = led_off_value;
-  }
-
-  controller->is_on = false;
-  controller->last_on_time = SysTick->CNT;
-}
-
-void toggle(BrightnessController *controller) {
-  if (controller->is_on) {
-    turn_off(controller);
-  } else {
-    turn_on(controller);
-  }
-}
-
-int main() {
-  SystemInit();
-
+void setup_hw() {
   RCC->APB2PCENR |= RCC_APB2Periph_GPIOC | RCC_APB2Periph_ADC1 |
-                    RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOD |
-                    RCC_APB2Periph_TIM1;
+                    RCC_APB2Periph_GPIOA | RCC_APB2Periph_TIM1 |
+                    RCC_APB2Periph_AFIO;
 
   RCC->APB1PCENR |= RCC_APB1Periph_TIM2;
 
+  AFIO->PCFR1 |= AFIO_PCFR1_TIM1_REMAP_PARTIALREMAP1;
+
   GPIOC->CFGLR &= ~(0xf << (4 * 3));
-  GPIOC->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP) << (4 * 3);
-  // LED1 is TIM1 Channel 1
-  GPIOD->CFGLR &= ~(0xf << (4 * 2));
-  GPIOD->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * 2);
-  GPIOD->CFGLR &= ~(0xf << (4 * 3));
-  GPIOD->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * 3);
+  GPIOC->CFGLR |= (GPIO_Speed_50MHz | GPIO_CNF_OUT_PP) << (4 * 3);
+
+  // LED1 is TIM2 Channel 3 PC0
+  GPIOC->CFGLR &= ~(0xf << (4 * 0));
+  GPIOC->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * 0);
+
+  // LED2 is TIM1 Channel 2 PC7
+  GPIOC->CFGLR &= ~(0xf << (4 * 7));
+  GPIOC->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * 7);
 
   // Reset timer 1
   RCC->APB2PRSTR |= RCC_APB2Periph_TIM1;
   RCC->APB2PRSTR &= ~RCC_APB2Periph_TIM1;
 
+  // Reset timer 2
   RCC->APB1PRSTR |= RCC_APB1Periph_TIM2;
   RCC->APB1PRSTR &= ~RCC_APB1Periph_TIM2;
 
   TIM1->PSC = timer_prescale;
   TIM2->PSC = timer_prescale;
+
   TIM1->ATRLR = led_off_value;
   TIM2->ATRLR = led_off_value;
 
   TIM1->SWEVGR |= TIM_UG;
   TIM2->SWEVGR |= TIM_UG;
 
-  // Enable Timer1 Channel1 Output
-  TIM1->CCER |= TIM_CC1E | TIM_CC1P;
-  TIM1->CHCTLR1 |= TIM_OC1M_2 | TIM_OC1M_1;
+  // Enable Timer1 Channel2 Output
+  TIM1->CCER |= TIM_CC2E | TIM_CC2P;
+  TIM1->CCER |= TIM_CC2E;
+  TIM1->CHCTLR1 |= TIM_OC2M_2 | TIM_OC2M_1;
 
-  TIM2->CCER |= TIM_CC2E | TIM_CC2P;
-  TIM2->CHCTLR1 |= TIM_OC2M_2 | TIM_OC2M_1;
+  // Enable Timer2 Channel3 Output
+  TIM2->CCER |= TIM_CC3E | TIM_CC3P;
+  // TIM2->CCER |= TIM_CC3E;
+  TIM2->CHCTLR2 |= TIM_OC3M_2 | TIM_OC3M_1;
 
-  TIM1->CH1CVR = led_off_value;
-  TIM2->CH2CVR = led_off_value;
+  TIM1->CH2CVR = led_off_value;
+  TIM2->CH3CVR = led_off_value;
 
   TIM1->BDTR |= TIM_MOE;
   TIM2->BDTR |= TIM_MOE;
+
   TIM1->CTLR1 |= TIM_CEN;
   TIM2->CTLR1 |= TIM_CEN;
+}
+
+int main() {
+  SystemInit();
+  setup_hw();
 
   TouchSensor sensor =
       touchSensor(GPIOA, 2, 0, touch_oversampling_iterations,
                   touch_turn_on_calibration_count, touch_hysteresis_window,
                   touch_recalibrate_settle_iterations);
+
+  volatile uint32_t *timers[2] = {&TIM2->CH3CVR, &TIM1->CH2CVR};
+
+  BrightnessController controller = brightnessController(
+      timers, 2, brightness_steps, min_brightness_dim_on,
+      min_brightness_min_period_ms, brightness_rampdown_delay_ms,
+      brightness_rampup_delay_ms, turn_off_brightness_rampdown_delay_ms,
+      led_off_value);
+
   initTouchSensor(&sensor);
 
-  volatile uint32_t *timers[2] = {&TIM1->CH1CVR, &TIM2->CH2CVR};
-  BrightnessController controller = brightnessController(timers, 2);
-
   if (led_blink_on_on) {
-    turn_on(&controller);
     write_led(true);
+    brightnessController_on(&controller);
     Delay_Ms(1000);
     write_led(false);
-    turn_off(&controller);
+    brightnessController_off(&controller);
     Delay_Ms(1000);
   }
 
   uint8_t brightness = turn_on_brightness;
-  set_brightness(&controller, brightness);
+  brightnessController_set(&controller, brightness);
 
   uint32_t last_duration = 0;
   bool brightness_ramp_started = false;
@@ -208,11 +110,10 @@ int main() {
   bool brightness_ramp_direction = brightness != 255;
   for (;;) {
     TouchSensorReadResult result = readTouchSensor(&sensor);
-    printf("time_ms: %d state: %d pressed: %d\n", result.last_state_duration / DELAY_MS_TIME, result.state, result.pressed);
 
     if (result.state == TouchSensorReadStateFallingEdge) {
       if (!brightness_ramp_started) {
-        toggle(&controller);
+        brightnessController_toggle(&controller);
       }
       brightness_ramp_started = false;
     }
@@ -243,7 +144,7 @@ int main() {
           brightness_ramp_direction = true;
         }
       }
-      set_brightness(&controller, brightness);
+      brightnessController_set(&controller, brightness);
     }
     write_led(result.pressed);
   }
